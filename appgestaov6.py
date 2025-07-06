@@ -270,7 +270,7 @@ elif st.session_state.admin_mode and st.session_state.admin_authenticated:
                                                 st.download_button("📥 Baixar Imagem", f, file_name=file, key=hash_key("img_" + full_path))
                                         else:
                                             if "download" in user_permissions:
-    # PESQUISA POR PALAVRA-CHAVE
+        # PESQUISA POR PALAVRA-CHAVE
     if "download" in user_permissions or "view" in user_permissions:
         st.markdown("### 🔍 Pesquisa de Documentos")
         keyword = st.text_input("Buscar por palavra-chave")
@@ -310,4 +310,3 @@ elif st.session_state.admin_mode and st.session_state.admin_authenticated:
     if st.checkbox("Mostrar log"):
         for row in c.execute("SELECT * FROM logs ORDER BY timestamp DESC LIMIT 50"):
             st.write(f"{row[0]} | Usuário: {row[1]} | Ação: {row[2]} | Arquivo: {row[3]}")
-
