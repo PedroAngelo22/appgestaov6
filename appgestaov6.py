@@ -26,13 +26,12 @@ conn.commit()
 BASE_DIR = "uploads"
 os.makedirs(BASE_DIR, exist_ok=True)
 
-# Listas padrão de disciplinas e fases
-if "DEFAULT_DISCIPLINES" not in st.session_state:
-    st.session_state.DEFAULT_DISCIPLINES = ["GES", "PRO", "MEC", "MET", "CIV", "ELE", "AEI"]
-if "DEFAULT_PHASES" not in st.session_state:
-    st.session_state.DEFAULT_PHASES = ["FEL1", "FEL2", "FEL3", "Executivo"]
+# Disciplinas e fases padrão
+if "disciplinas" not in st.session_state:
+    st.session_state.disciplinas = ["GES", "PRO", "MEC", "MET", "CIV", "ELE", "AEI"]
+if "fases" not in st.session_state:
+    st.session_state.fases = ["FEL1", "FEL2", "FEL3", "Executivo"]
 
-# Utilitários
 def get_project_path(project, discipline, phase):
     path = os.path.join(BASE_DIR, project, discipline, phase)
     os.makedirs(path, exist_ok=True)
@@ -140,39 +139,27 @@ elif st.session_state.admin_mode and not st.session_state.admin_authenticated:
         else:
             st.error("Senha incorreta.")
 
-# USUÁRIO AUTENTICADO – Upload
-elif st.session_state.authenticated:
-    username = st.session_state.username
-    user_data = c.execute("SELECT projects, permissions FROM users WHERE username=?", (username,)).fetchone()
-    user_projects = user_data[0].split(',') if user_data and user_data[0] else []
-    user_permissions = user_data[1].split(',') if user_data and user_data[1] else []
-
-    st.sidebar.markdown(f"🔐 Logado como: **{username}**")
-    if st.sidebar.button("Logout"):
-        st.session_state.authenticated = False
-        st.session_state.username = ""
-        st.rerun()
-
-    if "upload" in user_permissions:
-        st.markdown("### ⬆️ Upload de Arquivos")
-        with st.form("upload_form"):
-            project = st.text_input("Projeto")
-            discipline = st.selectbox("Disciplina", options=st.session_state.DEFAULT_DISCIPLINES)
-            phase = st.selectbox("Fase", options=st.session_state.DEFAULT_PHASES)
-            uploaded_file = st.file_uploader("Escolha o arquivo")
-            submitted = st.form_submit_button("Enviar")
-            if submitted and uploaded_file:
-                filename = uploaded_file.name
-                path = get_project_path(project, discipline, phase)
-                file_path = os.path.join(path, filename)
-                save_versioned_file(file_path)
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.read())
-                st.success(f"Arquivo '{filename}' salvo com sucesso.")
-                log_action(username, "upload", file_path)
-              # PAINEL ADMINISTRATIVO
+# PAINEL ADMINISTRATIVO
 elif st.session_state.admin_mode and st.session_state.admin_authenticated:
     st.subheader("Painel Administrativo")
+
+    # Adição de novas disciplinas
+    st.markdown("#### ➕ Gerenciar Disciplinas e Fases")
+    with st.form("add_discipline_phase"):
+        col1, col2 = st.columns(2)
+        with col1:
+            new_disc = st.text_input("Adicionar nova disciplina")
+            if st.form_submit_button("Adicionar Disciplina") and new_disc and new_disc not in st.session_state.disciplinas:
+                st.session_state.disciplinas.append(new_disc)
+                st.success(f"Disciplina '{new_disc}' adicionada.")
+
+        with col2:
+            new_phase = st.text_input("Adicionar nova fase")
+            if st.form_submit_button("Adicionar Fase") and new_phase and new_phase not in st.session_state.fases:
+                st.session_state.fases.append(new_phase)
+                st.success(f"Fase '{new_phase}' adicionada.")
+
+    st.divider()
 
     filtro = st.text_input("🔍 Filtrar usuários por nome")
     usuarios = c.execute("SELECT username, projects, permissions FROM users").fetchall()
@@ -189,50 +176,59 @@ elif st.session_state.admin_mode and st.session_state.admin_authenticated:
                 st.success(f"Usuário {user} removido.")
                 st.rerun()
         with col2:
-            projetos = st.multiselect(
-                f"Projetos ({user})", options=todos_projetos,
-                default=projetos_atuais.split(',') if projetos_atuais else [],
-                key=hash_key(f"proj_{user}")
-            )
-            permissoes = st.multiselect(
-                f"Permissões ({user})", options=["upload", "download", "view"],
-                default=permissoes_atuais.split(',') if permissoes_atuais else [],
-                key=hash_key(f"perm_{user}")
-            )
+            projetos = st.multiselect(f"Projetos ({user})", options=todos_projetos,
+                                      default=projetos_atuais.split(',') if projetos_atuais else [],
+                                      key=hash_key(f"proj_{user}"))
+            permissoes = st.multiselect(f"Permissões ({user})", options=["upload", "download", "view"],
+                                        default=permissoes_atuais.split(',') if permissoes_atuais else [],
+                                        key=hash_key(f"perm_{user}"))
             nova_senha = st.text_input(f"Nova senha ({user})", key=hash_key(f"senha_{user}"))
             if st.button(f"Atualizar senha {user}", key=hash_key(f"update_{user}")):
-                c.execute(
-                    "UPDATE users SET password=?, projects=?, permissions=? WHERE username=?",
-                    (nova_senha, ','.join(projetos), ','.join(permissoes), user)
-                )
+                c.execute("UPDATE users SET password=?, projects=?, permissions=? WHERE username=?",
+                          (nova_senha, ','.join(projetos), ','.join(permissoes), user))
                 conn.commit()
                 st.success(f"Usuário {user} atualizado.")
                 st.rerun()
-
-    st.markdown("---")
-    st.subheader("📚 Gerenciar Disciplinas e Fases")
-
-    with st.expander("➕ Adicionar Disciplina"):
-        new_disc = st.text_input("Nova Disciplina")
-        if st.button("Adicionar Disciplina"):
-            if new_disc and new_disc.upper() not in st.session_state.DEFAULT_DISCIPLINES:
-                st.session_state.DEFAULT_DISCIPLINES.append(new_disc.upper())
-                st.success(f"Disciplina '{new_disc}' adicionada.")
-
-    with st.expander("➕ Adicionar Fase"):
-        new_phase = st.text_input("Nova Fase")
-        if st.button("Adicionar Fase"):
-            if new_phase and new_phase not in st.session_state.DEFAULT_PHASES:
-                st.session_state.DEFAULT_PHASES.append(new_phase)
-                st.success(f"Fase '{new_phase}' adicionada.")
 
     if st.button("Sair do Painel Admin"):
         st.session_state.admin_authenticated = False
         st.session_state.admin_mode = False
         st.rerun()
-        # VISUALIZAÇÃO HIERÁRQUICA COM EXPANDERS
+# USUÁRIO AUTENTICADO
+elif st.session_state.authenticated:
+    username = st.session_state.username
+    user_data = c.execute("SELECT projects, permissions FROM users WHERE username=?", (username,)).fetchone()
+    user_projects = user_data[0].split(',') if user_data and user_data[0] else []
+    user_permissions = user_data[1].split(',') if user_data and user_data[1] else []
+
+    st.sidebar.markdown(f"🔐 Logado como: **{username}**")
+    if st.sidebar.button("Logout"):
+        st.session_state.authenticated = False
+        st.session_state.username = ""
+        st.rerun()
+
+    # UPLOAD
+    if "upload" in user_permissions:
+        st.markdown("### ⬆️ Upload de Arquivos")
+        with st.form("upload_form"):
+            project = st.text_input("Projeto")
+            discipline = st.selectbox("Disciplina", st.session_state.disciplinas)
+            phase = st.selectbox("Fase", st.session_state.fases)
+            uploaded_file = st.file_uploader("Escolha o arquivo")
+            submitted = st.form_submit_button("Enviar")
+            if submitted and uploaded_file:
+                filename = uploaded_file.name
+                path = get_project_path(project, discipline, phase)
+                file_path = os.path.join(path, filename)
+                save_versioned_file(file_path)
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.read())
+                st.success(f"Arquivo '{filename}' salvo com sucesso.")
+                log_action(username, "upload", file_path)
+
+    # VISUALIZAÇÃO HIERÁRQUICA
     if "download" in user_permissions or "view" in user_permissions:
-        st.markdown("### 📂 Documentos por Estrutura")
+        st.markdown("### 📂 Visualização de Documentos")
 
         for proj in sorted(os.listdir(BASE_DIR)):
             proj_path = os.path.join(BASE_DIR, proj)
@@ -273,7 +269,6 @@ elif st.session_state.admin_mode and st.session_state.admin_authenticated:
                                                 st.download_button("📥 Baixar Arquivo", f, file_name=file, key=hash_key("oth_" + full_path))
 
                                     log_action(username, "visualizar", full_path)
-
     # PESQUISA POR PALAVRA-CHAVE
     if "download" in user_permissions or "view" in user_permissions:
         st.markdown("### 🔍 Pesquisa de Documentos")
@@ -309,8 +304,8 @@ elif st.session_state.admin_mode and st.session_state.admin_authenticated:
             else:
                 st.warning("Nenhum arquivo encontrado.")
 
-        # HISTÓRICO DE AÇÕES
-        st.markdown("### 📜 Histórico de Ações")
-        if st.checkbox("Mostrar log"):
-            for row in c.execute("SELECT * FROM logs ORDER BY timestamp DESC LIMIT 50"):
-                st.write(f"{row[0]} | Usuário: {row[1]} | Ação: {row[2]} | Arquivo: {row[3]}")
+    # HISTÓRICO DE AÇÕES
+    st.markdown("### 📜 Histórico de Ações")
+    if st.checkbox("Mostrar log"):
+        for row in c.execute("SELECT * FROM logs ORDER BY timestamp DESC LIMIT 50"):
+            st.write(f"{row[0]} | Usuário: {row[1]} | Ação: {row[2]} | Arquivo: {row[3]}")
