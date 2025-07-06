@@ -230,7 +230,7 @@ elif st.session_state.admin_mode and st.session_state.admin_authenticated:
         st.session_state.admin_authenticated = False
         st.session_state.admin_mode = False
         st.rerun()
-    # VISUALIZAÇÃO HIERÁRQUICA COM EXPANDERS
+        # VISUALIZAÇÃO HIERÁRQUICA COM EXPANDERS
     if "download" in user_permissions or "view" in user_permissions:
         st.markdown("### 📂 Documentos por Estrutura")
 
@@ -270,7 +270,9 @@ elif st.session_state.admin_mode and st.session_state.admin_authenticated:
                                                 st.download_button("📥 Baixar Imagem", f, file_name=file, key=hash_key("img_" + full_path))
                                         else:
                                             if "download" in user_permissions:
-    # BLOCO DENTRO DE: elif st.session_state.authenticated:
+                                                st.download_button("📥 Baixar Arquivo", f, file_name=file, key=hash_key("oth_" + full_path))
+
+                                    log_action(username, "visualizar", full_path)
 
     # PESQUISA POR PALAVRA-CHAVE
     if "download" in user_permissions or "view" in user_permissions:
